@@ -272,6 +272,33 @@ class DynamoDbCompositeModelTest extends DynamoDbNonCompositeModelTest
         $this->assertEquals($this->marshaler->unmarshalItem($item2), $foundItems->last()->toArray());
     }
 
+    public function testSearchByHashAndSortKeyWithIndexSpecified()
+    {
+        $partitionKey = 'foo';
+        $item1 = $this->seed([
+            'id' => ['S' => $partitionKey],
+            'id2' => ['S' => 'bar_1']
+        ]);
+        $item2 = $this->seed([
+            'id' => ['S' => $partitionKey],
+            'id2' => ['S' => 'bar_2']
+        ]);
+        $this->seed([
+            'id' => ['S' => 'other'],
+            'id2' => ['S' => 'foo_1']
+        ]);
+
+
+        $query = $this->testModel
+            ->where('id', $partitionKey)
+            ->where('id2', 'between', ['bar_1', 'bar_2'])
+            ->withIndex('GSIndex');
+
+        $dynamoDbQuery = $query->toDynamoDbQuery();
+        $this->assertEquals('Query', $dynamoDbQuery->op);
+        $this->assertArrayNotHasKey('FilterExpression', $dynamoDbQuery->query);
+    }
+
     public function testStaticMethods()
     {
         $item = $this->seed(['name' => ['S' => 'Foo'], 'description' => ['S' => 'Bar']]);
@@ -712,6 +739,10 @@ class CompositeKeyWithIndex extends DynamoDbModel
             'range' => 'count',
         ],
         // extra index for testing setting index manually, not yet provisioned
+        'GSIndex' => [
+            'hash' => 'id',
+            'range' => 'id2',
+        ],
         'id_author_index' => [
             'hash' => 'id',
             'range' => 'author',
